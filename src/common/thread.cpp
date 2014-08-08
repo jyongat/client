@@ -234,7 +234,7 @@ int getThreadSchedulingGroup(pid_t tid)
 	// convention is to not call get/set_sched_policy methods if disabled by property
 	pthread_once(&gDoSchedulingGroupOnce, checkDoSchedulingGroup);
 	if (gDoSchedulingGroup) {
-		SchedPolicy policy;
+		SchedPolicy policy = SP_BACKGROUND;
 		// get_sched_policy does not support tid == 0
 		if (tid == 0) {
 			tid = getTid();
