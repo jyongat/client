@@ -22,7 +22,7 @@ TcpSocket::TcpSocket()
 	char *buf = (char *)malloc(bufSize);
 	ASSERT(buf != NULL);
 	mReadBuffer = uv_buf_init(buf, bufSize);
-
+	
 	mConnectTimes = 0;
 }
 
@@ -50,6 +50,16 @@ void TcpSocket::connectThread(void * param)
 	ASSERT(0 == uv_tcp_keepalive(&self->mClient, 1, 60));
 
 	self->mConnectRequest.data = self;
+	uv_timer_init(self->loop, &self->mTimer);
+	self->mTimer.data = self;
+	int timeout = (self->mConnectTimes / 10) * 1000;
+	if (timeout < 5000) {
+		timeout = 5000;
+	} else if (timeout > 60 * 1000) {
+		timeout = 60 * 1000;
+	}
+	
+	uv_timer_start(&self->mTimer, TcpSocket::onTimer, timeout, 0);
 	ASSERT(0 == uv_tcp_connect(&self->mConnectRequest, &self->mClient, \
 		(const struct sockaddr *)&self->addr, TcpSocket::onConnect));
 
@@ -87,13 +97,16 @@ void TcpSocket::disconnect()
 		ASSERT(0 == uv_read_stop(mStream));
 		mStream = NULL;
 	}
-	
+
 #if 0
 	mShutdownRequest.data = this;
 	if (0 != uv_shutdown(&mShutdownRequest, mStream, TcpSocket::onShutDown)) {
 		LOGE(TAG, "uv_shutdown error.");
 	}
 #endif
+	uv_timer_stop(&mTimer);
+	uv_close((uv_handle_t *)&mTimer, NULL);
+	
 	uv_close((uv_handle_t *)&mClient, TcpSocket::onClose);
 }
 
@@ -118,7 +131,7 @@ int TcpSocket::write(char *buf, ssize_t size)
 	bufs[count - 1] = uv_buf_init(buf + (count - 1) * pkgSize, size % pkgSize);
 
 #ifdef DEBUG_TCP_SOCKET
-	LOGI(TAG, "buf[%d - 1].size = %d with value = %d",count, bufs[count - 1].len, (*(int *)bufs[count - 1].base));
+	LOGI(TAG, "buf[%d - 1].size = %d with value = %d", count, bufs[count - 1].len, (*(int *)bufs[count - 1].base));
 #endif
 
 	mWriteRequest.data = this;
@@ -147,12 +160,31 @@ void TcpSocket::onAllocBuffer(uv_handle_t* handle, size_t size, uv_buf_t* buf)
 	*buf = self->mReadBuffer;
 }
 
+void TcpSocket::onTimer(uv_timer_t* handle)
+{
+	TcpSocket *self = reinterpret_cast<TcpSocket*>(handle->data);
+	ASSERT(self != NULL);
+
+	
+	if (NULL != self->mStream) {
+		return ;
+	}
+
+	uv_close((uv_handle_t *)handle, NULL);
+	self->mConnectTimes++;
+	
+	/* reconnect */
+	uv_close((uv_handle_t *)&self->mClient, NULL);	
+	ASSERT(0 == uv_thread_create(&self->mTidConnect, \
+		TcpSocket::connectThread, self));
+}
+
 void TcpSocket::onConnect(uv_connect_t *req, int status)
 {
 #ifdef DEBUG_TCP_SOCKET
 	LOGI(TAG, "onConnected.");
 #endif
-
+	
 	TcpSocket *self = reinterpret_cast<TcpSocket*>(req->data);
 	ASSERT(self != NULL);
 	
@@ -160,29 +192,15 @@ void TcpSocket::onConnect(uv_connect_t *req, int status)
 #ifdef DEBUG_TCP_SOCKET
 		LOGE(TAG, "connect error.");
 #endif
-		if (true == theApp.mContext.exit) {
-			return ;
-		}
 
-#if 0		
-		self->mConnectTimes++;
-		if (self->mConnectTimes > 30) {
-#ifdef DEBUG_TCP_SOCKET
-			LOGE(TAG, "failed connect times over 10, please contact server.");
-#endif	
-			theApp.exit();
-			return ;
-		}
-#endif
-
-		/* reconnect */
-		self->disconnect();
-		ASSERT(0 == uv_thread_create(&self->mTidConnect, \
-			TcpSocket::connectThread, self));
+		if (status == UV_ECANCELED) {
+			return;  /* Handle has been closed. */
+  		}
 		
 		return ;
 	}	
 
+	uv_timer_stop(&self->mTimer);
 	self->mConnectTimes = 0;
 	self->mStream = req->handle;
 	ASSERT(self->mStream != NULL);
@@ -221,6 +239,10 @@ void TcpSocket::onWrite(uv_write_t *req, int status)
 	LOGI(TAG, "onWrite.");
 #endif
 
+	if (status == UV_ECANCELED) {
+		return;  /* Handle has been closed. */
+	}
+	
 	ASSERT(req != NULL);
 	if (status) {
 #ifdef DEBUG_TCP_SOCKET

@@ -10,7 +10,6 @@ Application theApp;
 
 Application::Application()
 {
-	mContext.exit = false;
 	mWaterSampler = new WaterSampler();
 	ASSERT(mWaterSampler != NULL);
 

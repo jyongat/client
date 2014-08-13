@@ -18,7 +18,6 @@ static void signal_cb(uv_signal_t* handle, int signum)
 #ifdef DEBUG_MAIN
 		LOGI(TAG, "SIGINT trigered.");
 #endif
-		theApp.mContext.exit = true;
 		uv_close((uv_handle_t*)handle, NULL);
 	}
 }

@@ -23,12 +23,14 @@ private:
 	uv_shutdown_t mShutdownRequest;
 	uv_write_t mWriteRequest;
 	uv_buf_t mReadBuffer;
+	uv_timer_t mTimer;
 	int mConnectTimes;
 
 private:
 	static void connectThread(void * param);
 
 private:
+	static void onTimer(uv_timer_t* handle);
 	static void onConnect(uv_connect_t *req, int status);
 	static void onShutDown(uv_shutdown_t *req, int status);
 	static void onClose(uv_handle_t *handle);
