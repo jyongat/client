@@ -53,10 +53,10 @@ void TcpSocket::connectThread(void * param)
 	uv_timer_init(self->loop, &self->mTimer);
 	self->mTimer.data = self;
 	int timeout = (self->mConnectTimes / 10) * 1000;
-	if (timeout < 5000) {
-		timeout = 5000;
-	} else if (timeout > 60 * 1000) {
-		timeout = 60 * 1000;
+	if (timeout < 2000) {
+		timeout = 2000;
+	} else if (timeout > 15 * 1000) {
+		timeout = 15 * 1000;
 	}
 	
 	uv_timer_start(&self->mTimer, TcpSocket::onTimer, timeout, 0);
@@ -131,7 +131,7 @@ int TcpSocket::write(char *buf, ssize_t size)
 	bufs[count - 1] = uv_buf_init(buf + (count - 1) * pkgSize, size % pkgSize);
 
 #ifdef DEBUG_TCP_SOCKET
-	LOGI(TAG, "buf[%d - 1].size = %d with value = %d", count, bufs[count - 1].len, (*(int *)bufs[count - 1].base));
+	LOGI(TAG, "buf[%d - 1].size = %d with value = %s", count, bufs[count - 1].len, bufs[count - 1].base);
 #endif
 
 	mWriteRequest.data = this;
@@ -145,7 +145,9 @@ int TcpSocket::write(char *buf, ssize_t size)
 #ifdef DEBUG_TCP_SOCKET
 		LOGE(TAG, "ur_write error.");
 #endif
-		theApp.exit();
+		disconnect();
+		ASSERT(0 == uv_thread_create(&mTidConnect, \
+				TcpSocket::connectThread, this));
 	}
 	
 	return ret;
@@ -238,17 +240,21 @@ void TcpSocket::onWrite(uv_write_t *req, int status)
 #ifdef DEBUG_TCP_SOCKET
 	LOGI(TAG, "onWrite.");
 #endif
-
+	
 	if (status == UV_ECANCELED) {
 		return;  /* Handle has been closed. */
 	}
-	
-	ASSERT(req != NULL);
+
+	TcpSocket *self = reinterpret_cast<TcpSocket *>(req->data);
+	ASSERT(self != NULL);
+
 	if (status) {
 #ifdef DEBUG_TCP_SOCKET
 		LOGE(TAG, "uv_write error: %s\n", uv_strerror(status));
 #endif
-		theApp.exit();
+		self->disconnect();
+		ASSERT(0 == uv_thread_create(&self->mTidConnect, \
+				TcpSocket::connectThread, self));
 	}
 }
 
