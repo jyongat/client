@@ -65,7 +65,7 @@ status_t WaterSampler::Sampler::readyToRun()
 	/*init and start timer*/
 	mWaterSampler->mTimer.data = mWaterSampler;
 	uv_timer_init(mLoop, &mWaterSampler->mTimer);
-	uv_timer_start(&mWaterSampler->mTimer, WaterSampler::onTimer, 50, 5);
+	uv_timer_start(&mWaterSampler->mTimer, WaterSampler::onTimer, 50, 500);
 
 	return NO_ERROR;
 }
