@@ -14,12 +14,12 @@ var server = net.createServer(function(socket){
     // 我们获得一个连接 - 该连接自动关联一个socket对象
     console.log('connect: ' +
         socket.remoteAddress + ':' + socket.remotePort);
-    //socket.setEncoding('binary');
+    //socket.setEncoding('utf-8');
     //超时事件
-    socket.setTimeout(timeout,function(){
-        console.log('连接超时');
-        socket.end();
-    });
+//    socket.setTimeout(timeout,function(){
+//        console.log('连接超时');
+//        socket.end();
+//    });
 
     //接收到数据
     socket.on('data',function(data){
